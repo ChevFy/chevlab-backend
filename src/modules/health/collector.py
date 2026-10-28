@@ -81,7 +81,3 @@ class SystemCollector:
 
     def _read_network():
         pass
-
-
-test = SystemCollector()
-test.get_info()
