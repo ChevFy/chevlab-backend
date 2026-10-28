@@ -47,17 +47,18 @@ class SystemCollector:
         psutil.cpu_percent(interval=None, percpu=True)
 
     def get_info(self):
-        info = SystemInfo(
-            hostname=platform.node(),
-            os_name=platform.system(),
-            os_release=platform.release(),
-            cpu_model=self._read_cpu(),
-            cpu_cores=psutil.cpu_count(logical=False),
-            cpu_threads=psutil.cpu_count(logical=True),
-            memory_total=psutil.virtual_memory().total,
-            boot_time=datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc),
-        )
-        print(info.cpu_model)
+        if self.info is None:
+            self.info = SystemInfo(
+                hostname=platform.node(),
+                os_name=platform.system(),
+                os_release=platform.release(),
+                cpu_model=self._read_cpu(),
+                cpu_cores=psutil.cpu_count(logical=False),
+                cpu_threads=psutil.cpu_count(logical=True),
+                memory_total=psutil.virtual_memory().total,
+                boot_time=datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc),
+            )
+        return self.info
 
     def get_current(self):
         pass
