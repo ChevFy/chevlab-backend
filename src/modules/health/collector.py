@@ -42,7 +42,7 @@ class SystemSnapshot:
 
 class SystemCollector:
     def __init__(self):
-        self.info: SystemInfo | None
+        self.info: SystemInfo | None = None
         psutil.cpu_percent(interval=None)
         psutil.cpu_percent(interval=None, percpu=True)
 
@@ -81,3 +81,6 @@ class SystemCollector:
 
     def _read_network():
         pass
+
+
+system_collector = SystemCollector()
