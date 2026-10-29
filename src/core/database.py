@@ -6,6 +6,5 @@ engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
-
 async def close_db():
     await engine.dispose()

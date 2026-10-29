@@ -20,3 +20,4 @@ class SystemMetric(Base):
     cpu_temp: Mapped[float | None] = mapped_column(sa.REAL)
     net_recv_bytes_per_sec: Mapped[float | None] = mapped_column(sa.REAL)
     net_sent_bytes_per_sec: Mapped[float | None] = mapped_column(sa.REAL)
+    
