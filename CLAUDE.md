@@ -24,15 +24,17 @@ Python 3.12+, managed with `uv` (see `uv.lock`, `.python-version`). FastAPI back
 
 ```bash
 uv sync                          # install deps (incl. dev group)
-uv run python -m src.main        # run the stub entrypoint
-uv run fastapi dev src/main.py   # run FastAPI dev server (once an app is defined)
+uv run fastapi dev src/main.py   # run FastAPI dev server (from repo root)
+cd src && uv run python main.py  # alt: run via uvicorn entrypoint
 uv run ruff check .              # lint
 uv run ruff format .             # format
 uv run pytest                    # run tests
 uv run pytest path/to/test.py::test_name   # run a single test
-uv run alembic upgrade head      # apply DB migrations (once configured)
-uv run alembic revision --autogenerate -m "msg"   # create a migration
+cd src && uv run alembic upgrade head      # apply DB migrations (alembic.ini lives in src/)
+cd src && uv run alembic revision --autogenerate -m "msg"   # create a migration
 ```
+
+Imports are rooted at `src/` (`from core...`, `from modules...`), not `src.` — `src/` is not a package. Run Python entrypoints with `src/` as cwd or on `sys.path`. New models must be imported in `src/migrations/env.py` for autogenerate to see them.
 
 `httpx` is a dev dep — use FastAPI's `TestClient` / httpx for endpoint tests.
 

@@ -52,7 +52,6 @@ class SystemCollector:
         psutil.cpu_percent(interval=None, percpu=True)
         self.last_net = psutil.net_io_counters()
         self.last_net_time = time.monotonic()
-        self.has_net_baseline = False
 
     def get_info(self):
         if self.info is None:
@@ -132,12 +131,11 @@ class SystemCollector:
         current = psutil.net_io_counters()
         elapsed = now - self.last_net_time
 
-        prev = self._last_net
+        prev = self.last_net
         self.last_net = current
         self.last_net_time = now
 
-        if not self.has_net_baseline or elapsed <= 0:
-            self.has_net_baseline = True
+        if elapsed <= 0:
             return None, None
 
         recv = max(current.bytes_recv - prev.bytes_recv, 0) / elapsed

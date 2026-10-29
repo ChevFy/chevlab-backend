@@ -1,8 +1,19 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
 import uvicorn
+from fastapi import FastAPI
+
+from core.database import close_db
 from modules.system.router import router
 
-app = FastAPI(title="Chevlab API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await close_db()
+
+
+app = FastAPI(title="Chevlab API", lifespan=lifespan)
 
 app.include_router(router)
 
