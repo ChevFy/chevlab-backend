@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
 
+    SECRET_KEY: str = Field(min_length=32)
+    ADMIN_USERNAME: str = Field(min_length=1)
+    ADMIN_PASSWORD_HASH: str = Field(min_length=1)
+
     @property
     def DATABASE_URL(self) -> URL:
         return URL.create(

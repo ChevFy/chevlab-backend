@@ -4,9 +4,10 @@ import uvicorn
 from fastapi import FastAPI
 
 from core.database import close_db
-from modules.system.router import system_router
+from modules.auth.router import auth_router
 from modules.health.router import health_router
-from modules.scheduler.scheduler import scheduler_store_system_metric, scheduler
+from modules.scheduler.scheduler import scheduler, scheduler_store_system_metric
+from modules.system.router import system_router
 
 
 @asynccontextmanager
@@ -22,6 +23,7 @@ app = FastAPI(title="Chevlab API", lifespan=lifespan)
 
 app.include_router(system_router)
 app.include_router(health_router)
+app.include_router(auth_router)
 
 
 if __name__ == "__main__":
