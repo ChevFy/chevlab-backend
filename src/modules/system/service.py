@@ -1,4 +1,4 @@
-from ..health.collector import system_collector
+from .collector import system_collector
 
 
 def get_info():
