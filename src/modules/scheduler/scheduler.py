@@ -14,4 +14,3 @@ def scheduler_store_system_metric():
         id="store_system_metric",
         replace_existing=True,
     )
-

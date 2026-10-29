@@ -2,10 +2,12 @@ from core.database import SessionLocal
 
 from .collector import SystemSnapshot, system_collector
 from .models import SystemMetric
+from sqlalchemy import select
 
 
-def get_info():
-    return system_collector.get_info()
+def read_info():
+    return system_collector.read_info()
+
 
 def _map_snapshot(snapshot: SystemSnapshot):
     return SystemMetric(
@@ -27,3 +29,9 @@ async def collect_and_store():
         await session.commit()
     return snapshot
 
+
+async def read_latest():
+    async with SessionLocal() as session:
+        return await session.scalar(
+            select(SystemMetric).order_by(SystemMetric.timestamp.desc()).limit(1)
+        )

@@ -53,7 +53,7 @@ class SystemCollector:
         self.last_net = psutil.net_io_counters()
         self.last_net_time = time.monotonic()
 
-    def get_info(self):
+    def read_info(self):
         if self.info is None:
             self.info = SystemInfo(
                 hostname=platform.node(),
