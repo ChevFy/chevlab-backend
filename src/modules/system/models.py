@@ -19,19 +19,21 @@ class User(Base):
     __tablename__ = "users"
 
     user_id: Mapped[int] = mapped_column(sa.Integer, primary_key=True)
-    username: Mapped[str] = mapped_column(sa.String(25), nullable=False)
+    username: Mapped[str] = mapped_column(sa.String(25), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(sa.String(255), nullable=False)
-    password_salt: Mapped[str] = mapped_column(sa.String(255), nullable=False)
 
 
 class SystemMetric(Base):
     __tablename__ = "system_metric"
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, index=True
+    )
     cpu_percent: Mapped[float] = mapped_column(sa.REAL, nullable=False)
     memory_percent: Mapped[float] = mapped_column(sa.REAL, nullable=False)
     swap_percent: Mapped[float] = mapped_column(sa.REAL, nullable=False)
     disk_percent: Mapped[float] = mapped_column(sa.REAL, nullable=False)
-    cpu_temp: Mapped[float] = mapped_column(sa.REAL)
-    net_recv_bytes_per_sec: Mapped[float] = mapped_column(sa.REAL)
-    net_sent_bytes_per_sec: Mapped[float] = mapped_column(sa.REAL)
+    cpu_temp: Mapped[float | None] = mapped_column(sa.REAL)
+    net_recv_bytes_per_sec: Mapped[float | None] = mapped_column(sa.REAL)
+    net_sent_bytes_per_sec: Mapped[float | None] = mapped_column(sa.REAL)
