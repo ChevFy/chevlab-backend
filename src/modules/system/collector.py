@@ -50,9 +50,9 @@ class SystemCollector:
         self.info: SystemInfo | None = None
         psutil.cpu_percent(interval=None)
         psutil.cpu_percent(interval=None, percpu=True)
-        self._last_net = psutil.net_io_counters()
-        self._last_net_time = time.monotonic()
-        self._has_net_baseline = False
+        self.last_net = psutil.net_io_counters()
+        self.last_net_time = time.monotonic()
+        self.has_net_baseline = False
 
     def get_info(self):
         if self.info is None:
@@ -130,14 +130,14 @@ class SystemCollector:
     def _read_network_rate(self):
         now = time.monotonic()
         current = psutil.net_io_counters()
-        elapsed = now - self._last_net_time
+        elapsed = now - self.last_net_time
 
         prev = self._last_net
-        self._last_net = current
-        self._last_net_time = now
+        self.last_net = current
+        self.last_net_time = now
 
-        if not self._has_net_baseline or elapsed <= 0:
-            self._has_net_baseline = True
+        if not self.has_net_baseline or elapsed <= 0:
+            self.has_net_baseline = True
             return None, None
 
         recv = max(current.bytes_recv - prev.bytes_recv, 0) / elapsed
