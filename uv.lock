@@ -230,7 +230,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic-settings", specifier = ">=2.16.1" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
-    { name = "sqlalchemy", specifier = ">=2.1.6" },
+    { name = "sqlalchemy", specifier = ">=2.0,<3.0" },
 ]
 
 [package.metadata.requires-dev]
