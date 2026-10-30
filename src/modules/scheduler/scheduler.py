@@ -21,7 +21,7 @@ def scheduler_clean_system_metric():
         clean_system_metric,
         "interval",
         days=1,
-        next_run_time=datetime.now(),
+        next_run_time=datetime.now(scheduler.timezone),
         id="clean_system_metric",
         replace_existing=True,
     )
