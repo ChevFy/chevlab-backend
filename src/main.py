@@ -12,6 +12,7 @@ from modules.scheduler.scheduler import (
     scheduler_store_system_metric,
 )
 from modules.system.router import system_router
+from modules.docker.router import docker_router
 
 
 @asynccontextmanager
@@ -30,6 +31,7 @@ app = FastAPI(title="Chevlab API", lifespan=lifespan)
 app.include_router(system_router)
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(docker_router)
 
 
 if __name__ == "__main__":
