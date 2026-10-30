@@ -38,6 +38,18 @@ async def read_latest():
             select(SystemMetric).order_by(SystemMetric.timestamp.desc()).limit(1)
         )
 
+
+async def read_history(hours: int):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    async with SessionLocal() as session:
+        result = await session.scalars(
+            select(SystemMetric)
+            .where(SystemMetric.timestamp >= cutoff)
+            .order_by(SystemMetric.timestamp.asc())
+        )
+        return result.all()
+
+
 async def clean_system_metric(retention_days: int = 7):
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     async with SessionLocal() as session:
