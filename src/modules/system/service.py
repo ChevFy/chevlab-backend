@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from core.database import SessionLocal
 
 from .collector import SystemSnapshot, system_collector
 from .models import SystemMetric
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 
 def read_info():
@@ -35,3 +37,12 @@ async def read_latest():
         return await session.scalar(
             select(SystemMetric).order_by(SystemMetric.timestamp.desc()).limit(1)
         )
+
+async def clean_system_metric(retention_days: int = 7):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    async with SessionLocal() as session:
+        result = await session.execute(
+            delete(SystemMetric).where(SystemMetric.timestamp < cutoff)
+        )
+        await session.commit()
+    return result.rowcount

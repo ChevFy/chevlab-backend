@@ -6,13 +6,19 @@ from fastapi import FastAPI
 from core.database import close_db
 from modules.auth.router import auth_router
 from modules.health.router import health_router
-from modules.scheduler.scheduler import scheduler, scheduler_store_system_metric
+from modules.scheduler.scheduler import (
+    scheduler,
+    scheduler_clean_system_metric,
+    scheduler_store_system_metric,
+)
 from modules.system.router import system_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler_store_system_metric()
+    scheduler_clean_system_metric()
+
     scheduler.start()
     yield
     scheduler.shutdown()
