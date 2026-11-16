@@ -7,6 +7,7 @@ NFR-9). This module is pure-Python and MUST run off the event loop (callers use
 ``asyncio.to_thread``) because dateparser can be non-trivial (NFR-6).
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -14,6 +15,8 @@ from zoneinfo import ZoneInfo
 import dateparser
 
 from core.config import settings
+
+from .thai_norm import normalize_thai
 
 
 @dataclass(slots=True)
@@ -37,12 +40,22 @@ def _dateparser_settings(now: datetime) -> dict:
     }
 
 
+# A bare 24h clock literal (what ``normalize_thai`` emits for a Thai clock
+# phrase, and what numeric input like "07:00" already looks like).
+_HHMM_RE = re.compile(r"\b([01]?\d|2[0-3]):[0-5]\d\b")
+
+
 def _has_explicit_time(expr: str) -> bool:
     """Heuristic: does the phrase mention a clock time?
 
     Used to decide the OQ-4 all-day assumption (date-only input → all_day). If a
-    phrase carries no time words, we treat it as date-only.
+    phrase carries no time words, we treat it as date-only. ``expr`` here is the
+    POST-normalisation string, so a Thai clock phrase has already become an
+    ``HH:MM`` literal — detecting that covers both numeric and normalised Thai
+    clock inputs even though their Thai source words may have been stripped.
     """
+    if _HHMM_RE.search(expr):
+        return True
     lowered = expr.lower()
     time_markers = (
         "โมง",
@@ -82,8 +95,12 @@ def resolve_date(date_expr: str | None, *, now: datetime) -> ResolvedDate:
     if not date_expr or not date_expr.strip():
         return ResolvedDate(start_at=None, all_day=False, date_only=False)
 
+    # Rewrite Thai date/clock vocabulary dateparser mishandles into ISO dates /
+    # 24h HH:MM, anchored to this same ``now``. Pure-Python, no I/O.
+    normalized = normalize_thai(date_expr, now=now)
+
     parsed = dateparser.parse(
-        date_expr,
+        normalized,
         languages=["th", "en"],
         settings=_dateparser_settings(now),
     )
@@ -95,7 +112,7 @@ def resolve_date(date_expr: str | None, *, now: datetime) -> ResolvedDate:
     else:
         parsed = parsed.astimezone(UTC)
 
-    date_only = not _has_explicit_time(date_expr)
+    date_only = not _has_explicit_time(normalized)
     if date_only:
         # OQ-4 default: date-only input → an all-day task. Anchor start to the
         # start of that local day, expressed in UTC.
@@ -119,8 +136,10 @@ def resolve_lead_time(reminder_expr: str | None, *, now: datetime) -> timedelta 
     if not reminder_expr or not reminder_expr.strip():
         return None
 
+    normalized = normalize_thai(reminder_expr, now=now)
+
     parsed = dateparser.parse(
-        reminder_expr,
+        normalized,
         languages=["th", "en"],
         settings={
             "TIMEZONE": settings.PLANNER_RESOLVE_TZ,

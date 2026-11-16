@@ -104,3 +104,52 @@ indexes incl. the `ix_reminders_status_fire_at` scan index, CHECK constraints,
 - Resolver: `tomorrow 9am`→`02:00Z`, `tomorrow 15:00`→`08:00Z` (AC-8/AC-10 tz),
   `next Monday`→all-day, gibberish→unresolved.
 - Migration: offline `--sql` generation + model/DDL cross-check.
+
+## Addendum — deterministic Thai date/clock normalizer (parser pre-pass)
+
+Internal-logic change only: NO new DB tables, routes, schemas, or deps. Addresses
+the stage-01 OQ-10 caveat noted above by removing the reliance on the SLM to
+pre-normalize Thai time phrases — the resolver now handles them deterministically.
+
+### What / why
+`dateparser(['th','en'])` has broken or missing support for common Thai
+relative-day phrases and essentially zero support for Thai analog-clock vocabulary
+(`โมง`/`ทุ่ม`/`ตี`/`เที่ยง`). A pure-Python pre-pass rewrites those into shapes
+dateparser already resolves correctly (explicit ISO `YYYY-MM-DD` for computed days,
+24h `HH:MM` for clock), anchored to the same `now` the resolver receives.
+
+### Files
+- `src/modules/planner/parser/thai_norm.py` (new) — `normalize_thai(expr, *, now)`.
+  - Relative-day: computes concrete ISO date from `now` for `มะรืน`(+2),
+    `เมื่อวาน(นี้)`(-1), `เมื่อวานซืน`(-2), `<N> วันก่อน/ที่แล้ว`(-N),
+    `อีก <N> วัน`(+N), `สัปดาห์/อาทิตย์หน้า`(+7)/`ที่แล้ว`(-7),
+    `วัน<weekday>หน้า` (next weekday strictly after now), `สิ้นเดือน` (month end),
+    `ต้นเดือนหน้า` (first of next month).
+  - Clock: `ตี N`→0N:00, `N โมงเช้า`→N:00, `บ่าย N โมง`→(12+N):00, `N โมงเย็น`→
+    (12+N):00, `N ทุ่ม`→(18+N):00, `N นาฬิกา`→N:00, `เที่ยง(วัน)`→12:00,
+    `เที่ยงคืน`→00:00, `ครึ่ง`→:30. Thai numeral WORDS (นึง/หนึ่ง..สิบเอ็ด) and
+    Arabic digits both accepted. `เวลา7`→`เวลา 7` no-space fix.
+  - Mixed day+clock emits `YYYY-MM-DD HH:MM` in one shot; unrecognized input is
+    returned UNTOUCHED (idempotent on numeric/ISO/English) so dateparser keeps its
+    working cases.
+- `src/modules/planner/parser/resolver.py` (changed):
+  - `normalize_thai(...)` called at the TOP of both `resolve_date` and
+    `resolve_lead_time`, before `dateparser.parse`.
+  - `_has_explicit_time` now detects a bare `HH:MM` literal (regex) on the
+    POST-normalization string, so a Thai clock phrase whose source words were
+    stripped still counts as "has explicit time" (clock → not all_day; day-only →
+    all_day, FR-9a preserved). Store-UTC and return types unchanged.
+
+### Deliberately left unhandled
+- Bare `โมง` / `บ่าย` with no number — genuinely ambiguous (no safe hour), left
+  untouched so they stay day-only rather than fabricating a time (FR-9a).
+- Clock-only phrases (e.g. `ตีห้า`) resolve to the next future day via dateparser's
+  `PREFER_DATES_FROM=future` — identical behaviour to the already-working `07:00`,
+  so not a regression.
+
+### Tests
+- `tests/planner/test_thai_norm.py` (new, 41 tests) — every clock form, every
+  relative-day gap/bug (anchored to Tue 2026-11-17 09:00 Asia/Bangkok), mixed
+  day+clock, no-space case, Thai-numeral-word counters, `ครึ่ง` half-hour,
+  all_day assertions, and regression cases (พรุ่งนี้, 07:00, 7am, English).
+- Full `tests/planner`: **154 passed** (was 113; +41), ruff check/format clean.
