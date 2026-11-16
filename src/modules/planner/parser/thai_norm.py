@@ -201,6 +201,10 @@ def normalize_day(expr: str, now: datetime) -> str:
         (r"เมื่อวานซืน", lambda m: shift(-2)),
         (r"เมื่อวาน(?:นี้)?", lambda m: shift(-1)),
         (r"(?:วัน)?มะรืน(?:นี้)?", lambda m: shift(2)),
+        # วันนี้ / พรุ่งนี้ computed to explicit ISO too (never hand a bare Thai
+        # day-word to dateparser when a clock may be glued to it).
+        (r"วันนี้", lambda m: shift(0)),
+        (r"พรุ่งนี้", lambda m: shift(1)),
         # <N> วันก่อน / <N> วันที่แล้ว  → -N
         (
             rf"({_NUM})\s*วัน(?:ก่อน|ที่แล้ว)",
@@ -257,8 +261,27 @@ def _next_weekday(now: datetime, weekday: int) -> str:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-# "เวลา7" (no space) → "เวลา 7" so the clock patterns see a clean number.
-_NO_SPACE_FIX = re.compile(r"(เวลา)(\d)")
+# Invisible characters that would otherwise split/glue tokens and break matching:
+# zero-width space/non-joiner/joiner and the BOM/zero-width-no-break-space.
+_INVISIBLE = re.compile(r"[​‌‍﻿]")
+
+# Thai time-prepositions ("at"/"around"/"during") carry no scheduling meaning and
+# dateparser treats a glued token like "ตื่นเวลา" or "วันนี้เวลา" as a word it
+# cannot parse — poisoning the whole phrase. Drop them wherever they appear,
+# including glued to a preceding token with no space, leaving a single space so
+# the surrounding day/clock tokens parse cleanly.
+_TIME_PREPOSITIONS = re.compile(r"(?:เวลา|ตอน|ช่วง)")
+
+# A computed ISO date immediately followed by an HH:MM with no gap
+# (e.g. "2026-11-17" + "15:00" → "2026-11-1715:00"); force exactly one space.
+_ISO_CLOCK_GLUE = re.compile(r"(\d{4}-\d{2}-\d{2})(\d{1,2}:\d{2})")
+
+# The resolved date/time span we produce: an ISO date and/or an HH:MM (in that
+# order, space-separated). Once we have computed one, any surrounding leftover
+# word (a title fragment the SLM failed to strip, e.g. "ตื่น 08:00") makes
+# dateparser return None — it parses whole strings, not spans. If we produced a
+# clean span, isolate it so the remaining junk cannot poison the parse.
+_RESOLVED_SPAN = re.compile(r"(?:\d{4}-\d{2}-\d{2})(?:\s+\d{1,2}:\d{2})?|\d{1,2}:\d{2}")
 
 
 def normalize_thai(expr: str, *, now: datetime) -> str:
@@ -270,7 +293,23 @@ def normalize_thai(expr: str, *, now: datetime) -> str:
     if not expr:
         return expr
 
-    out = _NO_SPACE_FIX.sub(r"\1 \2", expr)
+    # 1. Strip invisible chars and collapse whitespace runs to a single space.
+    out = _INVISIBLE.sub("", expr)
+    out = re.sub(r"\s+", " ", out).strip()
+    # 2. Drop time-prepositions (glued or spaced) → single space, then re-collapse.
+    out = _TIME_PREPOSITIONS.sub(" ", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    # 3. Compute relative-day words to ISO, then clock words to HH:MM.
     out = normalize_day(out, now)
     out = normalize_clock(out)
+    # 4. Guarantee exactly one space between a computed ISO date and its clock.
+    out = _ISO_CLOCK_GLUE.sub(r"\1 \2", out)
+    # 5. If we computed a clean ISO-date/HH:MM span but non-date words remain
+    #    around it (title fragments the SLM left in), isolate the span so they
+    #    don't poison dateparser. Only do this when we actually produced a span
+    #    AND there is extra text — otherwise leave input untouched (idempotent on
+    #    "07:00", "7am", English, bare Thai day words dateparser handles).
+    span = _RESOLVED_SPAN.search(out)
+    if span and out.strip() != span.group(0):
+        out = span.group(0)
     return out

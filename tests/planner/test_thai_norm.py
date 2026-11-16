@@ -22,11 +22,13 @@ from modules.planner.parser.thai_norm import normalize_thai
 
 BKK = ZoneInfo("Asia/Bangkok")
 NOW = datetime(2026, 11, 17, 9, 0, tzinfo=BKK)  # Tuesday
+# Afternoon anchor for past-today cases (a morning clock on 'today' is in the past).
+NOW_PM = datetime(2026, 11, 17, 14, 0, tzinfo=BKK)  # Tuesday 14:00
 
 
-def _local(expr: str):
+def _local(expr: str, *, now: datetime = NOW):
     """Resolve ``expr`` and return its Asia/Bangkok-local datetime (or None)."""
-    r = resolve_date(expr, now=NOW)
+    r = resolve_date(expr, now=now)
     if r.start_at is None:
         return None
     return r.start_at.astimezone(BKK)

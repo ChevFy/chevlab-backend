@@ -99,6 +99,14 @@ def resolve_date(date_expr: str | None, *, now: datetime) -> ResolvedDate:
     # 24h HH:MM, anchored to this same ``now``. Pure-Python, no I/O.
     normalized = normalize_thai(date_expr, now=now)
 
+    # A lone 1-2 digit integer (e.g. the SLM dropped the clock and emitted just
+    # "8") is never a safe calendar date here — dateparser would silently read it
+    # as a day-of-month and fabricate an all-day task. Refuse it so the caller
+    # raises ParseAmbiguous (422 confirm) instead. Real times ("8:00", "2 ทุ่ม"→
+    # "20:00", "8 นาฬิกา"→"08:00") still carry a ':' and pass through.
+    if normalized.strip().isdigit() and len(normalized.strip()) <= 2:
+        return ResolvedDate(start_at=None, all_day=False, date_only=False)
+
     parsed = dateparser.parse(
         normalized,
         languages=["th", "en"],
