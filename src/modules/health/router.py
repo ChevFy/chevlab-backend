@@ -1,6 +1,7 @@
-from fastapi import APIRouter, status, HTTPException
-from core.database import SessionLocal
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
+
+from core.database import SessionLocal
 
 health_router = APIRouter(prefix="/api", tags=["health"])
 
@@ -15,6 +16,6 @@ async def readyz():
     try:
         async with SessionLocal() as session:
             await session.execute(text("SELECT 1"))
-    except Exception:
+    except Exception:  # noqa: BLE001 — readiness probe: any DB failure means "not ready"
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "db unavailable")
     return {"status": "ready"}

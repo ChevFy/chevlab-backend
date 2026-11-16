@@ -27,6 +27,38 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+  # Local SLM for the planner /todos/parse path (calendar-todo feature).
+  # Published on 127.0.0.1 only; the host-networked api reaches it at
+  # localhost:11434 (matches OLLAMA_HOST default). No GPU on the M710q — CPU only.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: homelab_ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      # Unload the ~2.3 GB model when idle so it does not permanently hold RAM
+      # alongside Postgres + the api on the 8 GB box (M-3 / NFR-5).
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+      # Serialize model work — one request at a time protects the 8 GB box.
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    # Cap RAM so Ollama + model cannot starve Postgres/api/sampler into OOM.
+    # qwen2.5:3b-instruct (~2.3 GB weights) fits comfortably under 4 GB.
+    mem_limit: 4g
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "ollama list >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   api:
     build: .
     container_name: homelab_api
@@ -41,6 +73,11 @@ services:
       db:
         condition: service_healthy
       socket-proxy:
+        condition: service_started
+      # Not required for boot: if Ollama is down the app still starts and only
+      # /todos/parse returns 503 (graceful degrade, NFR-7/14/17). We wait for it
+      # to have started so the parse path is usable once the model is pulled.
+      ollama:
         condition: service_started
     healthcheck:
       test:
@@ -68,3 +105,4 @@ services:
 
 volumes:
   postgres_data:
+  ollama_data:

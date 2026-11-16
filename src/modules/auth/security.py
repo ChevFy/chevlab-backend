@@ -16,6 +16,8 @@ def verify_password(plain: str):
 
 
 def authenticate(username: str, password: str):
-    username_ok = secrets.compare_digest(username.encode(), settings.ADMIN_USERNAME.encode())
+    username_ok = secrets.compare_digest(
+        username.encode(), settings.ADMIN_USERNAME.encode()
+    )
     password_ok = verify_password(password)
     return username_ok and password_ok

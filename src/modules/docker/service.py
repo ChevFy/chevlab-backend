@@ -1,5 +1,5 @@
 import docker
-from docker.errors import DockerException
+from docker.errors import DockerException  # noqa: F401  (re-exported for router)
 
 
 def read_containers():

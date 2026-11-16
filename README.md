@@ -8,12 +8,13 @@ Backend API for a homelab monitoring dashboard. Collects system metrics from the
 - **History:** stored samples can be queried by hour and are kept for 7 days.
 - **Authentication:** single-user login with JWT bearer tokens.
 - **Docker:** list of running containers, read through a restricted socket proxy.
+- **Planner (calendar + to-do):** capture tasks in natural language, keep a calendar of dated events, and get lead-time reminders over Telegram and in-app.
 
-Telegram alerts are planned but not implemented yet.
+Telegram alerts for system metrics are planned but not implemented yet; Telegram is currently used only by the planner's reminders.
 
 ## Tech stack
 
-FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL (psycopg 3) · APScheduler · psutil · pydantic-settings · managed with [uv](https://docs.astral.sh/uv/).
+FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL (psycopg 3) · APScheduler · psutil · pydantic-settings · Ollama + dateparser (natural-language parsing) · managed with [uv](https://docs.astral.sh/uv/).
 
 ## API
 
@@ -26,6 +27,26 @@ FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL (psycopg 3) · APScheduler · p
 | `GET` | `/api/history?hours=N` | No | Samples from the last `N` hours, oldest first. `N` is 1-168, default 1 |
 | `POST` | `/api/login` | No | Exchange username and password for an access token, valid for 1 hour |
 | `GET` | `/api/containers` | Yes | Running Docker containers |
+
+### Planner (calendar + to-do)
+
+Every planner route is private (send `Authorization: Bearer <token>`). All datetimes are UTC ISO-8601 on the wire; a request datetime must carry an offset or it is rejected with `422`.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/planner/todos` | Create a to-do. If `start_at` is given, it also creates a linked calendar event and schedules reminders |
+| `POST` | `/api/planner/todos/parse` | Natural-language capture: extract title, date and reminder from free text, then create the to-do |
+| `GET` | `/api/planner/todos?done=&date=&limit=&offset=` | List to-dos, filterable by completion and calendar day (day is interpreted in `PLANNER_RESOLVE_TZ`) |
+| `GET` | `/api/planner/todos/{id}` | Fetch one to-do |
+| `PATCH` | `/api/planner/todos/{id}` | Update a to-do; moving its date re-schedules reminders, clearing the date removes its event |
+| `DELETE` | `/api/planner/todos/{id}` | Delete a to-do and its owned event and reminders |
+| `GET` | `/api/planner/events?from=&to=` | Calendar events overlapping the `from`/`to` window (both required) |
+| `GET` | `/api/planner/reminders?limit=` | In-app feed: reminders that have fired and are not yet acknowledged |
+| `POST` | `/api/planner/reminders/{id}/ack` | Acknowledge (dismiss) a reminder so it stops appearing in the feed |
+
+**Natural-language parsing.** `POST /todos/parse` sends the text to a small language model (Ollama, model `OLLAMA_MODEL`) that extracts only a title and rough date/reminder phrases; [`dateparser`](https://dateparser.readthedocs.io/) then resolves those phrases to concrete times in `PLANNER_RESOLVE_TZ` (Asia/Bangkok by default) and stores them as UTC. Thai and English are supported. The response lists any `assumptions` the system filled in (for example, a date with no time becomes an all-day task). The parser degrades gracefully: if a phrase is ambiguous the endpoint returns `422` with a candidate to confirm, and if the model is down, times out, or is not configured it returns `503` — in all of these cases nothing is persisted, and the rest of the API keeps working. A cloud fallback (Claude) is available by setting `CALENDAR_PARSER=claude`.
+
+**Reminders.** A dated to-do gets a reminder with a default lead time of one day (`REMINDER_DEFAULT_LEAD`) unless the text or request says otherwise. A background job on the shared scheduler scans due reminders every `REMINDER_SCAN_INTERVAL_S` seconds and fans each one out to Telegram (if configured) and the in-app feed; firing is exactly-once and survives restarts, and reminders missed during downtime are caught up within `REMINDER_CATCHUP_WINDOW` (older ones expire). Fired reminders are pruned after `REMINDER_RETENTION_DAYS`; to-dos and events are kept indefinitely.
 
 Send the token as `Authorization: Bearer <token>`. Timestamps are in UTC.
 
@@ -42,6 +63,8 @@ Copy `.env.example` to `.env` and fill in the values.
 | `ADMIN_PASSWORD_HASH` | Argon2 hash of the login password |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel token, used only by the `cloudflared` service |
 
+The planner adds its own variables (natural-language parser, reminders, and Telegram). Sensible defaults ship in `.env.example`, so you only need to change them to point at a different Ollama host/model, switch to the Claude fallback, or enable Telegram delivery (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). See `.env.example` for the full list with defaults and [`docs/design/calendar-todo/08-deployment.md`](docs/design/calendar-todo/08-deployment.md) for deployment detail.
+
 Generate the secrets:
 
 ```bash
@@ -56,13 +79,14 @@ Wrap `ADMIN_PASSWORD_HASH` in single quotes in `.env`. Without them, Compose tre
 
 ## Development
 
-Requires Python 3.12+, uv, and Docker.
+Requires Python 3.12+, uv, and Docker. The planner's natural-language parser also needs [Ollama](https://ollama.com/) running with the configured model pulled (`ollama pull qwen2.5:3b-instruct`); the rest of the API works without it, and that path returns `503` until Ollama is up. Alternatively set `CALENDAR_PARSER=claude` with an `ANTHROPIC_API_KEY` to use the cloud fallback instead.
 
 ```bash
 uv sync                                # install dependencies
 docker compose up -d db                # start PostgreSQL
-cd src && uv run alembic upgrade head  # apply migrations
+cd src && uv run alembic upgrade head  # apply migrations (creates the planner tables)
 cd ..
+ollama serve                           # optional: enables POST /api/planner/todos/parse
 uv run fastapi dev src/main.py         # run the dev server on http://localhost:8000
 ```
 

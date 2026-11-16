@@ -1,7 +1,7 @@
 import platform
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psutil
 
@@ -63,7 +63,7 @@ class SystemCollector:
                 cpu_cores=psutil.cpu_count(logical=False),
                 cpu_threads=psutil.cpu_count(logical=True),
                 memory_total=psutil.virtual_memory().total,
-                boot_time=datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc),
+                boot_time=datetime.fromtimestamp(psutil.boot_time(), tz=UTC),
             )
         return self.info
 
@@ -73,7 +73,7 @@ class SystemCollector:
         swap = psutil.swap_memory()
         disk = psutil.disk_usage("/")
         return SystemSnapshot(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             uptime_seconds=int(time.time() - psutil.boot_time()),
             cpu_percent=psutil.cpu_percent(interval=None),
             cpu_percent_per_core=psutil.cpu_percent(interval=None, percpu=True),
